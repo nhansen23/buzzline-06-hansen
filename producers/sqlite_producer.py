@@ -12,10 +12,23 @@ Example record:
 
 Environment variables are in utils/utils_config module. 
 """
+#####################################
+# Import Modules
+#####################################
 
+# import from standard library
 import random
+import json
+import pathlib
+import sys
+import time
 import sqlite3
+import os
 from datetime import datetime, timedelta
+
+# import from local modules
+import utils.utils_config as config
+from utils.utils_logger import logger
 
 def random_weekday(start_date, end_date):
     date_diff = (end_date - start_date).days
@@ -52,25 +65,54 @@ def generate_messages(conn):
             "student": student_id,
         }
 
-        # Insert the message into the database
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO messages (grade, subject, test_date, score, student_id)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (grade, subject, test_date, score, student_id))
-        conn.commit()
-
         yield json_message
 
-# Open a connection to the SQLite3 database
-conn = sqlite3.connect('messages.db')
+def main() -> None:
 
-# Generate messages and insert into the database
-message_generator = generate_messages(conn)
+    logger.info("Starting Producer to run continuously.")
+    logger.info("Things can fail or get interrupted, so use a try block.")
+    logger.info("Moved .env variables into a utils config module.")
 
-# Generate a few messages (for example, 10 messages)
-for _ in range(10):
-    print(next(message_generator))
+    logger.info("STEP 1. Read required environment variables.")
 
-# Close the database connection
-conn.close()
+    try:
+        interval_secs: int = config.get_message_interval_seconds_as_int()
+        live_data_path: pathlib.Path = config.get_live_data_path()
+    except Exception as e:
+        logger.error(f"ERROR: Failed to read environment variables: {e}")
+        sys.exit(1)
+
+    logger.info("STEP 2. Delete the live data file if exists to start fresh.")
+
+    try:
+        if live_data_path.exists():
+            live_data_path.unlink()
+            logger.info("Deleted existing live data file.")
+
+        logger.info("STEP 3. Build the path folders to the live data file if needed.")
+        os.makedirs(live_data_path.parent, exist_ok=True)
+    except Exception as e:
+        logger.error(f"ERROR: Failed to delete live data file: {e}")
+        sys.exit(2)
+    
+    logger.info("STEP 4. Generate messages continuously.")
+   
+    try:
+        for message in generate_messages():
+            logger.info(message)
+
+            with live_data_path.open("a") as f:
+                f.write(json.dumps(message) + "\n")
+                logger.info(f"STEP 4a Wrote message to file: {message}")
+
+            time.sleep(interval_secs)
+    
+    except Exception as e:
+        logger.error(f"ERROR: Unexpected error: {e}")
+
+#####################################
+# Conditional Execution
+#####################################
+
+if __name__ == "__main__":
+    main()
