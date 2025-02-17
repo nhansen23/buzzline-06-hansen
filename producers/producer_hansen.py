@@ -28,10 +28,7 @@ import sys
 import time
 from datetime import datetime
 
-# import external modules
-from kafka import KafkaProducer
 
 # import from local modules
 import utils.utils_config as config
-from utils.utils_producer import verify_services, create_kafka_topic
 from utils.utils_logger import logger
