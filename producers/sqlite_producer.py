@@ -62,7 +62,7 @@ def generate_messages():
             "subject": subject,
             "test_date": test_date,
             "score": score,
-            "student": student_id,
+            "student_id": student_id,
         }
 
         yield json_message
