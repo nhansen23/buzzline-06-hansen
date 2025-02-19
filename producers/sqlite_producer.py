@@ -67,78 +67,36 @@ def generate_messages():
 
         yield json_message
 
-def create_table(conn):
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS test_scores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                grade TEXT,
-                subject TEXT,
-                test_date TEXT,
-                score INTEGER,
-                student_id INTEGER
-            )
-        ''')
-        conn.commit()
-        logger.info("Created test_scores table.")
-    except Exception as e:
-        logger.error(f"ERROR: Failed to create table: {e}")
-
-def insert_into_db(conn, message):
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO test_scores (grade, subject, test_date, score, student_id)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (message["grade"], message["subject"], message["test_date"], message["score"], message["student_id"]))
-        conn.commit()
-        logger.info(f"Inserted message into database: {message}")
-    except Exception as e:
-        logger.error(f"ERROR: Failed to insert message into database: {e}")
-
 def main():
     logger.info("Starting Producer to run continuously.")
     logger.info("Things can fail or get interrupted, so use a try block.")
     logger.info("Moved .env variables into a utils config module.")
 
-    logger.info("STEP 1. Read required environment variables.")
-
     try:
         interval_secs = config.get_message_interval_seconds_as_int()
         live_data_path = config.get_live_data_path()
-        db_path = config.get_sqlite_path()
     except Exception as e:
         logger.error(f"ERROR: Failed to read environment variables: {e}")
         sys.exit(1)
 
-    logger.info("STEP 2. Delete the live data file if exists to start fresh.")
     try:
         if live_data_path.exists():
             live_data_path.unlink()
             logger.info("Deleted existing live data file.")
-
-        logger.info("STEP 3. Build the path folders to the live data file if needed.")
         os.makedirs(live_data_path.parent, exist_ok=True)
     except Exception as e:
         logger.error(f"ERROR: Failed to delete live data file: {e}")
         sys.exit(2)
 
-    logger.info("STEP 4. Generate messages continuously.")
     try:
-        conn = sqlite3.connect(db_path)
         for message in generate_messages():
             logger.info(message)
             with live_data_path.open("a") as f:
                 f.write(json.dumps(message) + "\n")
                 logger.info(f"STEP 4a Wrote message to file: {message}")
-            insert_into_db(conn, message)
             time.sleep(interval_secs)
     except Exception as e:
         logger.error(f"ERROR: Unexpected error: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 if __name__ == "__main__":
     main()

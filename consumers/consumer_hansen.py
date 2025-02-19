@@ -46,48 +46,66 @@ DB_PATH = PROJECT_ROOT.joinpath("score_db.sqlite")
 # Function to process latest message
 #####################################
 
-def read_message():
-    """
-    Process a JSON message from a file.
-    """
-    logger.info(f"Reading messages from {DATA_FILE}")
+def create_table(conn):
     try:
-        with open(DATA_FILE, "r") as file:
-            data = json.load(file)
-            logger.info(f"Read data: {data}")
-
-            if isinstance(data, dict):
-                return data  # Return the message if it's a single dictionary
-            elif isinstance(data, list) and len(data) > 0:
-                return data[-1]  # Return the latest message if it's a list
-    except (json.JSONDecodeError, FileNotFoundError) as e:
-        logger.error(f"Error reading message: {e}")
-        return None
-    return None
-
-# Create the data directory if it doesn't exist
-    if not os.path.exists('data'):
-        os.makedirs('data')
-
-        # Connect to the SQLite3 database in the data directory
-        conn = sqlite3.connect('data/messages.db')
-
-        # Insert the message into the database
         cursor = conn.cursor()
         cursor.execute('''
-            INSERT INTO messages (grade, subject, test_date, score, student_id)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (grade, subject, test_date, score, student_id))
+            CREATE TABLE IF NOT EXISTS test_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grade TEXT,
+                subject TEXT,
+                test_date TEXT,
+                score INTEGER,
+                student_id INTEGER
+            )
+        ''')
         conn.commit()
-# Open a connection to the SQLite3 database
-conn = sqlite3.connect('data/messages.db')
+        logger.info("Created test_scores table.")
+    except Exception as e:
+        logger.error(f"ERROR: Failed to create table: {e}")
 
-# Generate messages and insert into the database
-message_generator = generate_messages(conn)
+def insert_into_db(conn, message):
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            INSERT INTO test_scores (grade, subject, test_date, score, student_id)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (message["grade"], message["subject"], message["test_date"], message["score"], message["student_id"]))
+        conn.commit()
+        logger.info(f"Inserted message into database: {message}")
+    except Exception as e:
+        logger.error(f"ERROR: Failed to insert message into database: {e}")
 
-# Generate a few messages (for example, 10 messages)
-for _ in range(10):
-    print(next(message_generator))
+def main():
+    logger.info("Starting Consumer to run continuously.")
+    logger.info("Moved .env variables into a utils config module.")
 
-# Close the database connection
-conn.close()
+    try:
+        live_data_path = config.get_live_data_path()
+        sqlite_path = config.get_sqlite_path()
+        logger.info(f"SQLITE_PATH: {sqlite_path}")
+    except Exception as e:
+        logger.error(f"ERROR: Failed to read environment variables: {e}")
+        sys.exit(1)
+
+    try:
+        conn = sqlite3.connect(sqlite_path)
+        create_table(conn)
+        
+        while True:
+            if live_data_path.exists():
+                with live_data_path.open("r") as f:
+                    for line in f:
+                        message = json.loads(line)
+                        insert_into_db(conn, message)
+                # Clear the file after reading all messages
+                live_data_path.unlink()
+            time.sleep(5)
+    except Exception as e:
+        logger.error(f"ERROR: Unexpected error: {e}")
+    finally:
+        if conn:
+            conn.close()
+
+if __name__ == "__main__":
+    main()
