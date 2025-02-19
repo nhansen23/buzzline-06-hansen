@@ -67,6 +67,24 @@ def generate_messages():
 
         yield json_message
 
+def create_table(conn):
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS test_scores (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                grade TEXT,
+                subject TEXT,
+                test_date TEXT,
+                score INTEGER,
+                student_id INTEGER
+            )
+        ''')
+        conn.commit()
+        logger.info("Created test_scores table.")
+    except Exception as e:
+        logger.error(f"ERROR: Failed to create table: {e}")
+
 def insert_into_db(conn, message):
     try:
         cursor = conn.cursor()
