@@ -66,8 +66,8 @@ def read_message():
     return None
 
 # Create the data directory if it doesn't exist
-        if not os.path.exists('data'):
-            os.makedirs('data')
+    if not os.path.exists('data'):
+        os.makedirs('data')
 
         # Connect to the SQLite3 database in the data directory
         conn = sqlite3.connect('data/messages.db')
