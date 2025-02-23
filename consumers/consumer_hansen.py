@@ -118,15 +118,15 @@ def animate(i, conn, fig, ax1, ax2):
     ax1.clear()
     subjects = set(data['subject'])
     for subject in subjects:
-        x = [datetime.strptime(date, "%Y-%m-%d") for date, sub in zip(data['test_date'], data['subject']) if sub == subject]
+        x = [student_id for student_id, sub in zip(data['student_id'], data['subject']) if sub == subject]
         y = [score for score, sub in zip(data['score'], data['subject']) if sub == subject]
-        ax1.plot(x, y, label=subject)
+        ax1.plot(x, y, marker='o', label=subject)
     ax1.legend(loc='upper left')
-    ax1.set_xlabel('Test Date')
+    ax1.set_xlabel('Student ID')
     ax1.set_ylabel('Score')
-    ax1.set_title('Test Scores Over Time')
+    ax1.set_title('Student Scores by Subject')
     ax1.grid(True)
-    
+
     ax2.clear()
     grades = sorted(avg_data.keys())
     for grade in grades:
