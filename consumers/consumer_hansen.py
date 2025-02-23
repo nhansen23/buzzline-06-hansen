@@ -44,6 +44,101 @@ PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 DATA_FILE = PROJECT_ROOT.joinpath("data", "score_data.json")
 DB_PATH = PROJECT_ROOT.joinpath("score_db.sqlite")
 
+
+#####################################
+# Fetch lastest data from database
+#####################################
+
+def fetch_latest_data(conn):
+    cursor = conn.cursor()
+    cursor.execute("SELECT grade, subject, test_date, score, student_id FROM test_scores ORDER BY test_date DESC")
+    rows = cursor.fetchall()
+    data = defaultdict(list)
+    for row in rows:
+        grade, subject, test_date, score, student_id = row
+        data['grade'].append(grade)
+        data['subject'].append(subject)
+        data['test_date'].append(test_date)
+        data['score'].append(score)
+        data['student_id'].append(student_id)
+
+    cursor.execute("SELECT grade, subject, AVG(score) FROM test_scores GROUP BY grade, subject")
+    averages = cursor.fetchall()
+    avg_data = defaultdict(lambda: defaultdict(float))
+    for grade, subject, avg_score in averages:
+        avg_data[grade][subject] = avg_score
+
+    return data, avg_data
+
+#####################################
+# Plot student assessment data
+#####################################
+
+def plot_data(data):
+    plt.clf()
+    subjects = set(data['subject'])
+    for subject in subjects:
+        x = [datetime.strptime(date, "%Y-%m-%d") for date, sub in zip(data['test_date'], data['subject']) if sub == subject]
+        y = [score for score, sub in zip(data['score'], data['subject']) if sub == subject]
+        plt.plot(x, y, label=subject)
+    plt.legend(loc='upper left')
+    plt.xlabel('Test Date')
+    plt.ylabel('Score')
+    plt.title('Test Scores Over Time')
+    plt.grid(True)
+    plt.draw()
+
+
+#####################################
+# Plot aggregated assessment data
+#####################################
+def plot_avg_data(avg_data):
+    plt.clf()
+    grades = sorted(avg_data.keys())
+    for grade in grades:
+        subjects = sorted(avg_data[grade].keys())
+        avg_scores = [avg_data[grade][subject] for subject in subjects]
+        plt.plot(subjects, avg_scores, marker='o', label=f'Grade {grade}')
+    plt.legend(loc='upper left')
+    plt.xlabel('Subject')
+    plt.ylabel('Average Score')
+    plt.title('Average Test Scores by Subject and Grade')
+    plt.grid(True)
+    plt.draw()
+
+
+
+#####################################
+# Update graph continuously
+#####################################
+
+def animate(i, conn, fig, ax1, ax2):
+    data, avg_data = fetch_latest_data(conn)
+    
+    ax1.clear()
+    subjects = set(data['subject'])
+    for subject in subjects:
+        x = [datetime.strptime(date, "%Y-%m-%d") for date, sub in zip(data['test_date'], data['subject']) if sub == subject]
+        y = [score for score, sub in zip(data['score'], data['subject']) if sub == subject]
+        ax1.plot(x, y, label=subject)
+    ax1.legend(loc='upper left')
+    ax1.set_xlabel('Test Date')
+    ax1.set_ylabel('Score')
+    ax1.set_title('Test Scores Over Time')
+    ax1.grid(True)
+    
+    ax2.clear()
+    grades = sorted(avg_data.keys())
+    for grade in grades:
+        subjects = sorted(avg_data[grade].keys())
+        avg_scores = [avg_data[grade][subject] for subject in subjects]
+        ax2.plot(subjects, avg_scores, marker='o', label=f'Grade {grade}')
+    ax2.legend(loc='upper left')
+    ax2.set_xlabel('Subject')
+    ax2.set_ylabel('Average Score')
+    ax2.set_title('Average Test Scores by Subject and Grade')
+    ax2.grid(True)
+
 #####################################
 # Function to process latest message
 #####################################
@@ -94,6 +189,11 @@ def main():
         conn = sqlite3.connect(sqlite_path)
         create_table(conn)
         
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
+        ani = animation.FuncAnimation(fig, animate, fargs=(conn, fig, ax1, ax2), interval=5000)
+
+        plt.show()
+
         while True:
             if live_data_path.exists():
                 with live_data_path.open("r") as f:
