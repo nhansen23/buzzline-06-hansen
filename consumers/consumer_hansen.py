@@ -51,14 +51,13 @@ DB_PATH = PROJECT_ROOT.joinpath("score_db.sqlite")
 
 def fetch_latest_data(conn):
     cursor = conn.cursor()
-    cursor.execute("SELECT grade, subject, test_date, score, student_id FROM test_scores ORDER BY test_date DESC")
+    cursor.execute("SELECT grade, subject, score, student_id FROM test_scores ORDER BY grade DESC")
     rows = cursor.fetchall()
     data = defaultdict(list)
     for row in rows:
-        grade, subject, test_date, score, student_id = row
+        grade, subject, score, student_id = row
         data['grade'].append(grade)
         data['subject'].append(subject)
-        data['test_date'].append(test_date)
         data['score'].append(score)
         data['student_id'].append(student_id)
 
@@ -77,14 +76,15 @@ def fetch_latest_data(conn):
 def plot_data(data):
     plt.clf()
     subjects = set(data['subject'])
+    student_ids = set(data['student_id'])
     for subject in subjects:
-        x = [datetime.strptime(date, "%Y-%m-%d") for date, sub in zip(data['test_date'], data['subject']) if sub == subject]
+        x = [student_id for student_id, sub in zip(data['student_id'], data['subject']) if sub == subject]
         y = [score for score, sub in zip(data['score'], data['subject']) if sub == subject]
-        plt.plot(x, y, label=subject)
+        plt.plot(x, y, marker='o', label=subject)
     plt.legend(loc='upper left')
-    plt.xlabel('Test Date')
+    plt.xlabel('Student ID')
     plt.ylabel('Score')
-    plt.title('Test Scores Over Time')
+    plt.title('Student Scores by Subject')
     plt.grid(True)
     plt.draw()
 
