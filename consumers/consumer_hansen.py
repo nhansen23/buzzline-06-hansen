@@ -67,26 +67,26 @@ def fetch_latest_data(conn):
     for grade, subject, avg_score in averages:
         avg_data[grade][subject] = avg_score
 
-    return data, avg_data
+    return avg_data
 
 #####################################
 # Plot student assessment data
 #####################################
 
-def plot_data(data):
-    plt.clf()
-    subjects = set(data['subject'])
-    student_ids = set(data['student_id'])
-    for subject in subjects:
-        x = [student_id for student_id, sub in zip(data['student_id'], data['subject']) if sub == subject]
-        y = [score for score, sub in zip(data['score'], data['subject']) if sub == subject]
-        plt.plot(x, y, marker='o', label=subject)
-    plt.legend(loc='upper left')
-    plt.xlabel('Student ID')
-    plt.ylabel('Score')
-    plt.title('Student Scores by Subject')
-    plt.grid(True)
-    plt.draw()
+# def plot_data(data):
+#    plt.clf()
+#    subjects = set(data['subject'])
+#    student_ids = set(data['student_id'])
+#    for subject in subjects:
+#        x = [student_id for student_id, sub in zip(data['student_id'], data['subject']) if sub == subject]
+#        y = [score for score, sub in zip(data['score'], data['subject']) if sub == subject]
+#        plt.plot(x, y, marker='o', label=subject)
+#    plt.legend(loc='upper left')
+#    plt.xlabel('Student ID')
+#    plt.ylabel('Score')
+#    plt.title('Student Scores by Subject')
+#    plt.grid(True)
+#    plt.draw()
 
 
 #####################################
@@ -95,49 +95,37 @@ def plot_data(data):
 def plot_avg_data(avg_data):
     plt.clf()
     grades = sorted(avg_data.keys())
-    for grade in grades:
-        subjects = sorted(avg_data[grade].keys())
-        avg_scores = [avg_data[grade][subject] for subject in subjects]
-        plt.plot(subjects, avg_scores, marker='o', label=f'Grade {grade}')
+    subjects = sorted(set(subject for grade in avg_data for subject in avg_data[grade]))
+
+    for subject in subjects:
+        avg_scores = [avg_data[grade][subject] if subject in avg_data[grade] else None for grade in grades]
+        plt.plot(grades, avg_scores, marker='o', label=subject)
+    
     plt.legend(loc='upper left')
-    plt.xlabel('Subject')
+    plt.xlabel('Grade')
     plt.ylabel('Average Score')
-    plt.title('Average Test Scores by Subject and Grade')
+    plt.title('Average Test Scores by Grade and Subject')
     plt.grid(True)
-    plt.draw()
-
-
+    
 
 #####################################
 # Update graph continuously
 #####################################
 
 def animate(i, conn, fig, ax1, ax2):
-    data, avg_data = fetch_latest_data(conn)
+    avg_data = fetch_latest_data(conn)
     
     ax1.clear()
-    subjects = set(data['subject'])
-    for subject in subjects:
-        x = [student_id for student_id, sub in zip(data['student_id'], data['subject']) if sub == subject]
-        y = [score for score, sub in zip(data['score'], data['subject']) if sub == subject]
-        ax1.plot(x, y, marker='o', label=subject)
-    ax1.legend(loc='upper left')
-    ax1.set_xlabel('Student ID')
-    ax1.set_ylabel('Score')
-    ax1.set_title('Student Scores by Subject')
-    ax1.grid(True)
-
-    ax2.clear()
     grades = sorted(avg_data.keys())
-    for grade in grades:
-        subjects = sorted(avg_data[grade].keys())
-        avg_scores = [avg_data[grade][subject] for subject in subjects]
-        ax2.plot(subjects, avg_scores, marker='o', label=f'Grade {grade}')
-    ax2.legend(loc='upper left')
-    ax2.set_xlabel('Subject')
-    ax2.set_ylabel('Average Score')
-    ax2.set_title('Average Test Scores by Subject and Grade')
-    ax2.grid(True)
+    subjects = sorted(set(subject for grade in avg_data for subject in avg_data[grade]))
+    for subject in subjects:
+        avg_scores = [avg_data[grade][subject] if subject in avg_data[grade] else None for grade in grades]
+        ax1.plot(grades, avg_scores, marker='o', label=subject)
+    ax1.legend(loc='upper left')
+    ax1.set_xlabel('Grade')
+    ax1.set_ylabel('Average Score')
+    ax1.set_title('Average Test Scores by Subject and Grade')
+    ax1.grid(True)
 
 #####################################
 # Function to process latest message
@@ -189,8 +177,10 @@ def main():
         conn = sqlite3.connect(sqlite_path)
         create_table(conn)
         
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8))
-        ani = animation.FuncAnimation(fig, animate, fargs=(conn, fig, ax1, ax2), interval=5000)
+        fig, (ax1) = plt.subplots(2, 1, figsize=(10, 8))
+        
+        plt.ion()  # Enable interactive mode
+        ani = animation.FuncAnimation(fig, animate, fargs=(conn, fig, ax1), interval=5000)
 
         plt.show()
 
