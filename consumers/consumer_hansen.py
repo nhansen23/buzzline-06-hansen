@@ -67,7 +67,7 @@ def fetch_latest_data(conn):
     for grade, subject, avg_score in averages:
         avg_data[grade][subject] = avg_score
 
-    return avg_data
+    return data, avg_data
 
 #####################################
 # Plot student assessment data
@@ -112,20 +112,22 @@ def plot_avg_data(avg_data):
 # Update graph continuously
 #####################################
 
-def animate(i, conn, fig, ax1, ax2):
-    avg_data = fetch_latest_data(conn)
+def animate(i, conn, ax):
+    _, avg_data = fetch_latest_data(conn)
     
-    ax1.clear()
+    ax.clear()
     grades = sorted(avg_data.keys())
     subjects = sorted(set(subject for grade in avg_data for subject in avg_data[grade]))
     for subject in subjects:
         avg_scores = [avg_data[grade][subject] if subject in avg_data[grade] else None for grade in grades]
-        ax1.plot(grades, avg_scores, marker='o', label=subject)
-    ax1.legend(loc='upper left')
-    ax1.set_xlabel('Grade')
-    ax1.set_ylabel('Average Score')
-    ax1.set_title('Average Test Scores by Subject and Grade')
-    ax1.grid(True)
+        ax.plot(grades, avg_scores, marker='o', label=subject)
+    ax.legend(loc='upper left')
+    ax.set_xlabel('Grade')
+    ax.set_ylabel('Average Score')
+    ax.set_title('Average Test Scores by Grade and Subject')
+    ax.grid(True)
+
+    pass
 
 #####################################
 # Function to process latest message
@@ -148,6 +150,7 @@ def create_table(conn):
         logger.info("Created test_scores table.")
     except Exception as e:
         logger.error(f"ERROR: Failed to create table: {e}")
+    pass
 
 def insert_into_db(conn, message):
     try:
@@ -177,12 +180,15 @@ def main():
         conn = sqlite3.connect(sqlite_path)
         create_table(conn)
         
-        fig, (ax1) = plt.subplots(2, 1, figsize=(10, 8))
+        fig, ax = plt.subplots(figsize=(10, 8))
         
         plt.ion()  # Enable interactive mode
-        ani = animation.FuncAnimation(fig, animate, fargs=(conn, fig, ax1), interval=5000)
+        ani = animation.FuncAnimation(fig, animate, fargs=(conn, ax), interval=5000, save_count=100)
+    
+        # Save the animation using ffmpeg if available
+        ani.save('animation.mp4', writer='ffmpeg')
 
-        plt.show()
+        plt.show()  # Ensure this is called to display the plot
 
         while True:
             if live_data_path.exists():
