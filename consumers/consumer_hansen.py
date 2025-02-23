@@ -42,32 +42,52 @@ from utils.utils_logger import logger
 
 PROJECT_ROOT = pathlib.Path(__file__).parent.parent
 DATA_FILE = PROJECT_ROOT.joinpath("data", "score_data.json")
-DB_PATH = PROJECT_ROOT.joinpath("score_db.sqlite")
+# DB_PATH = PROJECT_ROOT.joinpath("score_db.sqlite")
+
+#####################################
+# Read the JSON data
+#####################################
+
+def read_json(json_path):
+    if json_path.exists():
+        with open(json_path, 'r') as file:
+            data = json.load(file)
+            avg_data = defaultdict(lambda: defaultdict(float))
+            for entry in data:
+                grade = entry['grade']
+                subject = entry['subject']
+                avg_data[grade][subject] += entry['score']
+            # Convert sums to averages
+            for grade in avg_data:
+                for subject in avg_data[grade]:
+                    avg_data[grade][subject] /= len([entry for entry in data if entry['grade'] == grade and entry['subject'] == subject])
+            return avg_data
+    return defaultdict(lambda: defaultdict(float))
 
 
 #####################################
 # Fetch lastest data from database
 #####################################
 
-def fetch_latest_data(conn):
-    cursor = conn.cursor()
-    cursor.execute("SELECT grade, subject, score, student_id FROM test_scores ORDER BY grade DESC")
-    rows = cursor.fetchall()
-    data = defaultdict(list)
-    for row in rows:
-        grade, subject, score, student_id = row
-        data['grade'].append(grade)
-        data['subject'].append(subject)
-        data['score'].append(score)
-        data['student_id'].append(student_id)
+# def fetch_latest_data(conn):
+#    cursor = conn.cursor()
+#    cursor.execute("SELECT grade, subject, score, student_id FROM test_scores ORDER BY grade DESC")
+#    rows = cursor.fetchall()
+#    data = defaultdict(list)
+#    for row in rows:
+#        grade, subject, score, student_id = row
+#        data['grade'].append(grade)
+#        data['subject'].append(subject)
+#        data['score'].append(score)
+#        data['student_id'].append(student_id)
 
-    cursor.execute("SELECT grade, subject, AVG(score) FROM test_scores GROUP BY grade, subject")
-    averages = cursor.fetchall()
-    avg_data = defaultdict(lambda: defaultdict(float))
-    for grade, subject, avg_score in averages:
-        avg_data[grade][subject] = avg_score
+#    cursor.execute("SELECT grade, subject, AVG(score) FROM test_scores GROUP BY grade, subject")
+#    averages = cursor.fetchall()
+#    avg_data = defaultdict(lambda: defaultdict(float))
+#    for grade, subject, avg_score in averages:
+#        avg_data[grade][subject] = avg_score
 
-    return data, avg_data
+#    return data, avg_data
 
 #####################################
 # Plot student assessment data
@@ -112,8 +132,8 @@ def plot_avg_data(avg_data):
 # Update graph continuously
 #####################################
 
-def animate(i, conn, ax):
-    _, avg_data = fetch_latest_data(conn)
+def animate(i, json_path, ax):
+    avg_data = read_json(json_path)
     
     ax.clear()
     grades = sorted(avg_data.keys())
@@ -127,63 +147,67 @@ def animate(i, conn, ax):
     ax.set_title('Average Test Scores by Grade and Subject')
     ax.grid(True)
 
-    pass
-
 #####################################
 # Function to process latest message
 #####################################
 
-def create_table(conn):
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS test_scores (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                grade TEXT,
-                subject TEXT,
-                test_date TEXT,
-                score INTEGER,
-                student_id INTEGER
-            )
-        ''')
-        conn.commit()
-        logger.info("Created test_scores table.")
-    except Exception as e:
-        logger.error(f"ERROR: Failed to create table: {e}")
-    pass
+def insert_into_json(json_path, message):
+    data = []
+    if json_path.exists():
+        with open(json_path, 'r') as file:
+            data = json.load(file)
+    data.append(message)
+    with open(json_path, 'w') as file:
+        json.dump(data, file, indent=4)
+    logger.info(f"Inserted message into JSON file: {message}")
 
-def insert_into_db(conn, message):
-    try:
-        cursor = conn.cursor()
-        cursor.execute('''
-            INSERT INTO test_scores (grade, subject, test_date, score, student_id)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (message["grade"], message["subject"], message["test_date"], message["score"], message["student_id"]))
-        conn.commit()
-        logger.info(f"Inserted message into database: {message}")
-    except Exception as e:
-        logger.error(f"ERROR: Failed to insert message into database: {e}")
+
+#def create_table(conn):
+#    try:
+#        cursor = conn.cursor()
+#        cursor.execute('''
+#            CREATE TABLE IF NOT EXISTS test_scores (
+#                id INTEGER PRIMARY KEY AUTOINCREMENT,
+#                grade TEXT,
+#                subject TEXT,
+#                test_date TEXT,
+#                score INTEGER,
+#                student_id INTEGER
+#            )
+#        ''')
+#        conn.commit()
+#        logger.info("Created test_scores table.")
+#    except Exception as e:
+#        logger.error(f"ERROR: Failed to create table: {e}")
+#    pass
+
+#def insert_into_db(conn, message):
+#    try:
+#        cursor = conn.cursor()
+#        cursor.execute('''
+#            INSERT INTO test_scores (grade, subject, test_date, score, student_id)
+#            VALUES (?, ?, ?, ?, ?)
+#        ''', (message["grade"], message["subject"], message["test_date"], message["score"], message["student_id"]))
+#        conn.commit()
+#        logger.info(f"Inserted message into database: {message}")
+#    except Exception as e:
+#        logger.error(f"ERROR: Failed to insert message into database: {e}")
 
 def main():
     logger.info("Starting Consumer to run continuously.")
-    logger.info("Moved .env variables into a utils config module.")
 
     try:
-        live_data_path = config.get_live_data_path()
-        sqlite_path = config.get_sqlite_path()
-        logger.info(f"SQLITE_PATH: {sqlite_path}")
+        json_path = DATA_FILE
+        logger.info(f"JSON_PATH: {json_path}")
     except Exception as e:
         logger.error(f"ERROR: Failed to read environment variables: {e}")
         sys.exit(1)
 
     try:
-        conn = sqlite3.connect(sqlite_path)
-        create_table(conn)
-        
         fig, ax = plt.subplots(figsize=(10, 8))
         
         plt.ion()  # Enable interactive mode
-        ani = animation.FuncAnimation(fig, animate, fargs=(conn, ax), interval=5000, save_count=100)
+        ani = animation.FuncAnimation(fig, animate, fargs=(json_path, ax), interval=5000)
     
         # Save the animation using ffmpeg if available
         ani.save('animation.mp4', writer='ffmpeg')
@@ -191,19 +215,16 @@ def main():
         plt.show()  # Ensure this is called to display the plot
 
         while True:
-            if live_data_path.exists():
-                with live_data_path.open("r") as f:
+            if json_path.exists():
+                with json_path.open("r") as f:
                     for line in f:
                         message = json.loads(line)
-                        insert_into_db(conn, message)
+                        insert_into_json(json_path, message)
                 # Clear the file after reading all messages
-                live_data_path.unlink()
+                json_path.unlink()
             time.sleep(5)
     except Exception as e:
         logger.error(f"ERROR: Unexpected error: {e}")
-    finally:
-        if conn:
-            conn.close()
 
 if __name__ == "__main__":
-    main()
+    
